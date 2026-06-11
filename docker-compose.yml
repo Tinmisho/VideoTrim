@@ -1,0 +1,36 @@
+services:
+  videotrim:
+    build: .
+    container_name: videotrim
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - videotrim-uploads:/app/uploads
+      - videotrim-outputs:/app/outputs
+    environment:
+      - MAX_UPLOAD_GB=10
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Cleanup old files every hour (files older than 2h)
+  cleanup:
+    image: alpine:3.19
+    container_name: videotrim-cleanup
+    restart: unless-stopped
+    volumes:
+      - videotrim-uploads:/uploads
+      - videotrim-outputs:/outputs
+    entrypoint: >
+      sh -c "while true; do
+        find /uploads -type f -mmin +120 -delete;
+        find /outputs -type f -mmin +120 -delete;
+        sleep 3600;
+      done"
+
+volumes:
+  videotrim-uploads:
+  videotrim-outputs:

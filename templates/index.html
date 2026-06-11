@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VideoTrim</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #222535;
+    --border: #2e3248;
+    --accent: #6c8aff;
+    --accent-dim: #3d4fa8;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --text: #e2e4f0;
+    --muted: #6b7280;
+    --mono: 'JetBrains Mono', 'Fira Mono', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; padding: 40px 16px 80px;
+  }
+  header {
+    text-align: center; margin-bottom: 40px;
+    position: relative; width: 100%; max-width: 580px;
+  }
+  header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.03em; color: #fff; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--muted); margin-top: 6px; font-size: 0.9rem; }
+  .vibe-tag {
+    position: absolute; top: 4px; right: 0;
+    font-size: 0.68rem; color: var(--muted); font-family: var(--mono);
+    letter-spacing: 0.04em; opacity: 0.6; user-select: none;
+  }
+  .vibe-tag span { color: var(--accent); opacity: 1; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 28px; width: 100%; max-width: 580px; margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 18px;
+  }
+  #dropzone {
+    border: 2px dashed var(--border); border-radius: 10px; padding: 40px 20px;
+    text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  #dropzone.drag-over { border-color: var(--accent); background: rgba(108,138,255,0.06); }
+  #dropzone.has-file { border-color: var(--green); border-style: solid; }
+  #dropzone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-icon { font-size: 2.2rem; margin-bottom: 10px; display: block; }
+  .drop-label { font-size: 0.95rem; color: var(--text); font-weight: 500; }
+  .drop-sub { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+  .progress-wrap { margin-top: 14px; display: none; }
+  .progress-bar-bg { background: var(--surface2); border-radius: 999px; height: 6px; overflow: hidden; }
+  .progress-bar-fill {
+    height: 100%; background: var(--accent); border-radius: 999px;
+    transition: width 0.25s ease; width: 0%;
+  }
+  .progress-bar-fill.green { background: var(--green); }
+  .progress-bar-fill.animated {
+    background: linear-gradient(90deg, var(--accent), #a78bfa, var(--accent));
+    background-size: 200% 100%; animation: shimmer 1.4s infinite linear;
+  }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  .progress-label { font-size: 0.78rem; color: var(--muted); margin-top: 6px; font-family: var(--mono); }
+  #file-info {
+    display: none; margin-top: 14px; background: var(--surface2);
+    border-radius: 8px; padding: 10px 14px; font-size: 0.82rem;
+    color: var(--muted); font-family: var(--mono); word-break: break-all;
+  }
+  #file-info .fi-name { color: var(--text); font-weight: 600; }
+  #file-info .fi-dur { color: var(--accent); }
+  .segments-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .segment {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px; position: relative;
+  }
+  .segment-header {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
+  }
+  .segment-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+  .remove-segment {
+    background: none; border: 1px solid var(--border); border-radius: 6px;
+    color: var(--muted); font-size: 0.75rem; padding: 3px 8px; cursor: pointer;
+    transition: border-color 0.15s, color 0.15s; width: auto;
+  }
+  .remove-segment:hover { border-color: var(--red); color: var(--red); }
+  .time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.04em; }
+  input[type=text] {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-family: var(--mono);
+    font-size: 1rem; padding: 10px 12px; outline: none; transition: border-color 0.2s;
+  }
+  input[type=text]:focus { border-color: var(--accent); }
+  input[type=text]::placeholder { color: var(--muted); }
+  .hint { font-size: 0.74rem; color: var(--muted); margin-top: 4px; }
+  .add-segment-btn {
+    width: 100%; padding: 10px; background: transparent;
+    border: 1.5px dashed var(--border); border-radius: 9px; color: var(--muted);
+    font-size: 0.88rem; cursor: pointer; transition: border-color 0.2s, color 0.2s;
+    margin-bottom: 16px; display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .add-segment-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .options-row { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
+  .toggle-wrap { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+  .toggle-wrap input[type=checkbox] { display: none; }
+  .toggle {
+    width: 36px; height: 20px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 999px; position: relative; transition: background 0.2s;
+  }
+  .toggle::after {
+    content: ''; position: absolute; width: 14px; height: 14px;
+    background: var(--muted); border-radius: 50%; top: 2px; left: 2px;
+    transition: left 0.2s, background 0.2s;
+  }
+  .toggle-wrap input:checked + .toggle { background: var(--accent-dim); border-color: var(--accent); }
+  .toggle-wrap input:checked + .toggle::after { left: 18px; background: var(--accent); }
+  .toggle-label { font-size: 0.84rem; color: var(--text); }
+  .toggle-sub { font-size: 0.75rem; color: var(--muted); }
+  select {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-size: 0.85rem; padding: 8px 10px; outline: none; cursor: pointer;
+  }
+  button#trim-btn {
+    width: 100%; padding: 13px; background: var(--accent); border: none;
+    border-radius: 9px; color: #fff; font-size: 1rem; font-weight: 600;
+    cursor: pointer; transition: opacity 0.2s, transform 0.1s; letter-spacing: 0.01em;
+  }
+  button#trim-btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+  button#trim-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  #trim-progress-wrap { display: none; margin-top: 14px; }
+  #status {
+    display: none; margin-top: 14px; font-size: 0.82rem; font-family: var(--mono);
+    padding: 12px; border-radius: 8px; background: var(--surface2); white-space: pre-wrap;
+  }
+  #status.processing { color: var(--yellow); }
+  #status.success { color: var(--green); }
+  #status.error { color: var(--red); }
+  .download-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; padding: 13px; background: transparent;
+    border: 1.5px solid var(--green); border-radius: 9px; color: var(--green);
+    font-size: 1rem; font-weight: 600; cursor: pointer; text-decoration: none;
+    transition: background 0.2s; margin-top: 12px;
+  }
+  .download-btn:hover { background: rgba(74,222,128,0.08); }
+  .download-btn.secondary {
+    border-color: var(--border); color: var(--muted); font-size: 0.82rem;
+    padding: 9px; margin-top: 6px;
+  }
+  .download-btn.secondary:hover { border-color: var(--muted); background: transparent; }
+  #downloads-wrap { display: none; margin-top: 4px; }
+  .divider {
+    font-size: 0.7rem; color: var(--muted); text-align: center;
+    margin: 10px 0 4px; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Video<span>Trim</span></h1>
+  <p>Upload · Set timestamps · Cut · Download</p>
+  <div class="vibe-tag">vibe coded by <span>M.G</span></div>
+</header>
+
+<div class="card">
+  <div class="card-title">01 — Upload</div>
+  <div id="dropzone">
+    <input type="file" id="file-input" accept="video/*">
+    <span class="drop-icon">🎬</span>
+    <div class="drop-label">Drop video here or click to browse</div>
+    <div class="drop-sub">MP4, MKV, MOV, AVI, WebM, TS — up to 10 GB</div>
+  </div>
+  <div class="progress-wrap" id="upload-progress">
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="upload-fill"></div></div>
+    <div class="progress-label" id="upload-label">Uploading… 0%</div>
+  </div>
+  <div id="file-info"></div>
+</div>
+
+<div class="card">
+  <div class="card-title">02 — Trim</div>
+
+  <div class="segments-list" id="segments-list"></div>
+
+  <button class="add-segment-btn" id="add-segment-btn">
+    <span>＋</span> Add another cut
+  </button>
+
+  <div class="options-row">
+    <label class="toggle-wrap">
+      <input type="checkbox" id="fast-mode">
+      <div class="toggle"></div>
+      <div>
+        <div class="toggle-label">Fast mode</div>
+        <div class="toggle-sub">Stream copy, no re-encode</div>
+      </div>
+    </label>
+    <div>
+      <label style="margin-bottom:4px">OUTPUT FORMAT</label>
+      <select id="output-ext">
+        <option value="mp4">MP4</option>
+        <option value="mkv">MKV</option>
+        <option value="mov">MOV</option>
+        <option value="webm">WebM</option>
+      </select>
+    </div>
+  </div>
+
+  <button id="trim-btn" disabled>Trim &amp; merge</button>
+
+  <div id="trim-progress-wrap">
+    <div class="progress-bar-bg" style="margin-top:14px">
+      <div class="progress-bar-fill animated" id="trim-fill"></div>
+    </div>
+    <div class="progress-label" id="trim-label">Processing…</div>
+  </div>
+
+  <div id="status"></div>
+
+  <div id="downloads-wrap">
+    <a id="merged-download-btn" class="download-btn" href="#">⬇ Download merged video</a>
+    <div class="divider" id="individual-divider" style="display:none">or download individual cuts</div>
+    <div id="individual-downloads"></div>
+  </div>
+</div>
+
+<script>
+  let uploadedFileId = null, uploadedExt = null, videoDuration = null, segmentCount = 0;
+
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('file-input');
+  const fileInfo = document.getElementById('file-info');
+  const uploadProgress = document.getElementById('upload-progress');
+  const uploadFill = document.getElementById('upload-fill');
+  const uploadLabel = document.getElementById('upload-label');
+  const trimBtn = document.getElementById('trim-btn');
+  const statusEl = document.getElementById('status');
+  const trimProgressWrap = document.getElementById('trim-progress-wrap');
+  const trimFill = document.getElementById('trim-fill');
+  const trimLabel = document.getElementById('trim-label');
+  const downloadsWrap = document.getElementById('downloads-wrap');
+  const mergedBtn = document.getElementById('merged-download-btn');
+  const individualDownloads = document.getElementById('individual-downloads');
+  const individualDivider = document.getElementById('individual-divider');
+
+  function fmtDur(s) {
+    if (!s) return '';
+    const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = Math.floor(s%60);
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  }
+
+  function fmtSize(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    if (b < 1073741824) return (b/1048576).toFixed(1) + ' MB';
+    return (b/1073741824).toFixed(2) + ' GB';
+  }
+
+  function showStatus(type, msg) {
+    statusEl.className = type; statusEl.textContent = msg; statusEl.style.display = 'block';
+  }
+
+  function addSegment() {
+    segmentCount++;
+    const idx = segmentCount;
+    const div = document.createElement('div');
+    div.className = 'segment'; div.dataset.idx = idx;
+    div.innerHTML = `
+      <div class="segment-header">
+        <div class="segment-label">Cut ${idx}</div>
+        ${idx > 1 ? `<button class="remove-segment" onclick="removeSegment(${idx})">✕ Remove</button>` : ''}
+      </div>
+      <div class="time-row">
+        <div>
+          <label>START TIME</label>
+          <input type="text" class="seg-start" placeholder="00:00:00" value="${idx===1?'0':''}">
+          <div class="hint">HH:MM:SS, MM:SS or seconds</div>
+        </div>
+        <div>
+          <label>END TIME</label>
+          <input type="text" class="seg-end" placeholder="${videoDuration ? fmtDur(videoDuration) : '00:03:45'}">
+          <div class="hint">Leave blank = end of file</div>
+        </div>
+      </div>`;
+    document.getElementById('segments-list').appendChild(div);
+  }
+
+  function removeSegment(idx) {
+    const el = document.querySelector(`[data-idx="${idx}"]`);
+    if (el) el.remove();
+  }
+
+  document.getElementById('add-segment-btn').addEventListener('click', addSegment);
+  addSegment();
+
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault(); dropzone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+
+  function handleFile(file) {
+    uploadedFileId = null; uploadedExt = null; videoDuration = null;
+    trimBtn.disabled = true; downloadsWrap.style.display = 'none';
+    statusEl.style.display = 'none'; fileInfo.style.display = 'none';
+    dropzone.classList.remove('has-file');
+    uploadProgress.style.display = 'block';
+    uploadFill.style.width = '0%'; uploadLabel.textContent = 'Uploading… 0%';
+
+    const fd = new FormData(); fd.append('file', file);
+    const xhr = new XMLHttpRequest(); xhr.open('POST', '/upload');
+
+    xhr.upload.addEventListener('progress', e => {
+      if (e.lengthComputable) {
+        const pct = Math.round(e.loaded / e.total * 100);
+        uploadFill.style.width = pct + '%';
+        uploadLabel.textContent = `Uploading… ${pct}%  (${fmtSize(e.loaded)} / ${fmtSize(e.total)})`;
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      uploadProgress.style.display = 'none';
+      const data = JSON.parse(xhr.responseText);
+      if (xhr.status === 200) {
+        uploadedFileId = data.file_id; uploadedExt = data.ext; videoDuration = data.duration;
+        dropzone.classList.add('has-file');
+        fileInfo.style.display = 'block';
+        fileInfo.innerHTML = `<span class="fi-name">${data.original_name}</span>` +
+          (data.duration ? `  —  <span class="fi-dur">${fmtDur(data.duration)}</span>` : '');
+        const sel = document.getElementById('output-ext');
+        for (const opt of sel.options) if (opt.value === uploadedExt) { sel.value = uploadedExt; break; }
+        document.querySelectorAll('.seg-end').forEach(el => {
+          if (!el.value) el.placeholder = data.duration ? fmtDur(data.duration) : '00:03:45';
+        });
+        trimBtn.disabled = false;
+      } else {
+        showStatus('error', '✗ Upload failed: ' + (data.error || 'unknown'));
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      uploadProgress.style.display = 'none';
+      showStatus('error', '✗ Network error during upload');
+    });
+    xhr.send(fd);
+  }
+
+  trimBtn.addEventListener('click', async () => {
+    if (!uploadedFileId) return;
+
+    const segments = [];
+    document.querySelectorAll('#segments-list .segment').forEach(seg => {
+      segments.push({
+        start: seg.querySelector('.seg-start').value || '0',
+        end: seg.querySelector('.seg-end').value || '',
+      });
+    });
+
+    trimBtn.disabled = true;
+    downloadsWrap.style.display = 'none';
+    individualDownloads.innerHTML = '';
+    statusEl.style.display = 'none';
+    trimProgressWrap.style.display = 'block';
+    trimFill.className = 'progress-bar-fill animated';
+    trimFill.style.width = '5%';
+
+    const outputExt = document.getElementById('output-ext').value;
+    const fastMode = document.getElementById('fast-mode').checked;
+    const results = [];
+
+    // Step 1: trim all segments
+    for (let i = 0; i < segments.length; i++) {
+      trimLabel.textContent = `Trimming cut ${i+1} of ${segments.length}…`;
+      trimFill.style.width = Math.round((i / segments.length) * 70 + 5) + '%';
+
+      try {
+        const res = await fetch('/trim', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file_id: uploadedFileId, ext: uploadedExt,
+            start: segments[i].start, end: segments[i].end,
+            fast_mode: fastMode, output_ext: outputExt,
+          }),
+        });
+        const data = await res.json();
+        if (res.ok) results.push({ ok: true, output_id: data.output_id, ext: data.output_ext, idx: i+1 });
+        else results.push({ ok: false, idx: i+1, error: data.error });
+      } catch(e) {
+        results.push({ ok: false, idx: i+1, error: e.message });
+      }
+    }
+
+    const okResults = results.filter(r => r.ok);
+    const failed = results.filter(r => !r.ok);
+
+    if (okResults.length === 0) {
+      trimFill.className = 'progress-bar-fill'; trimFill.style.width = '100%';
+      showStatus('error', '✗ All segments failed:\n' + failed.map(r=>`Cut ${r.idx}: ${r.error}`).join('\n'));
+      trimBtn.disabled = false;
+      return;
+    }
+
+    // Step 2: merge if more than one succeeded
+    if (okResults.length > 1) {
+      trimLabel.textContent = 'Merging segments…';
+      trimFill.style.width = '85%';
+
+      try {
+        const res = await fetch('/merge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ output_ids: okResults.map(r => r.output_id), ext: outputExt }),
+        });
+        const data = await res.json();
+
+        trimFill.style.width = '100%';
+        trimFill.className = 'progress-bar-fill green';
+        trimLabel.textContent = 'Done!';
+
+        if (res.ok) {
+          const errMsg = failed.length ? `\n⚠ ${failed.length} cut(s) failed and were skipped.` : '';
+          showStatus('success', `✓ ${okResults.length} cuts merged into one file.` + errMsg);
+          mergedBtn.href = `/download/${data.output_id}/${data.output_ext}`;
+          mergedBtn.style.display = 'flex';
+
+          // Individual cuts as secondary links
+          if (okResults.length > 1) {
+            individualDivider.style.display = 'block';
+            okResults.forEach(r => {
+              const a = document.createElement('a');
+              a.className = 'download-btn secondary';
+              a.href = `/download/${r.output_id}/${r.ext}`;
+              a.textContent = `⬇ Cut ${r.idx} only (.${r.ext})`;
+              individualDownloads.appendChild(a);
+            });
+          }
+        } else {
+          showStatus('error', '✗ Merge failed: ' + (data.error || 'unknown'));
+          // Fall back to individual downloads
+          mergedBtn.style.display = 'none';
+          okResults.forEach(r => {
+            const a = document.createElement('a');
+            a.className = 'download-btn';
+            a.href = `/download/${r.output_id}/${r.ext}`;
+            a.textContent = `⬇ Download Cut ${r.idx} (.${r.ext})`;
+            individualDownloads.appendChild(a);
+          });
+        }
+      } catch(e) {
+        showStatus('error', '✗ Merge request failed: ' + e.message);
+      }
+
+    } else {
+      // Only one segment — skip merge, direct download
+      trimFill.style.width = '100%';
+      trimFill.className = 'progress-bar-fill green';
+      trimLabel.textContent = 'Done!';
+      showStatus('success', '✓ Done!');
+      mergedBtn.href = `/download/${okResults[0].output_id}/${okResults[0].ext}`;
+      mergedBtn.textContent = '⬇ Download trimmed video';
+      mergedBtn.style.display = 'flex';
+      individualDivider.style.display = 'none';
+    }
+
+    downloadsWrap.style.display = 'block';
+    trimBtn.disabled = false;
+  });
+</script>
+</body>
+</html>
