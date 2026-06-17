@@ -2,7 +2,7 @@ import os
 import uuid
 import subprocess
 import re
-from flask import Flask, request, jsonify, send_file, render_template
+from flask import Flask, request, jsonify, send_file, render_template, Response
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
@@ -124,12 +124,10 @@ def merge():
     if not output_ids or len(output_ids) < 2:
         return jsonify({'error': 'Need at least 2 segments to merge'}), 400
 
-    # Validate all IDs
     for oid in output_ids:
         if not re.match(r'^[a-f0-9\-]{36}$', oid):
             return jsonify({'error': f'Invalid output ID: {oid}'}), 400
 
-    # Build concat list file
     concat_id = str(uuid.uuid4())
     concat_list = os.path.join(app.config['OUTPUT_FOLDER'], f"{concat_id}.txt")
     merged_id = str(uuid.uuid4())
@@ -159,6 +157,56 @@ def merge():
         except: pass
 
     return jsonify({'output_id': merged_id, 'output_ext': ext})
+
+@app.route('/preview/<file_id>/<ext>')
+def preview(file_id, ext):
+    """Stream the uploaded source video for in-browser preview, with HTTP Range support
+    so the <video> element can seek without downloading the whole file."""
+    if not re.match(r'^[a-f0-9\-]{36}$', file_id):
+        return jsonify({'error': 'Invalid ID'}), 400
+    path = os.path.join(app.config['UPLOAD_FOLDER'], f"{file_id}.{ext}")
+    if not os.path.exists(path):
+        return jsonify({'error': 'File not found'}), 404
+
+    file_size = os.path.getsize(path)
+    range_header = request.headers.get('Range', None)
+
+    mime_map = {
+        'mp4': 'video/mp4', 'webm': 'video/webm', 'mov': 'video/quicktime',
+        'mkv': 'video/x-matroska', 'avi': 'video/x-msvideo', 'ts': 'video/mp2t',
+        'flv': 'video/x-flv', 'm4v': 'video/x-m4v',
+    }
+    mimetype = mime_map.get(ext, 'application/octet-stream')
+
+    if not range_header:
+        return send_file(path, mimetype=mimetype)
+
+    m = re.match(r'bytes=(\d+)-(\d*)', range_header)
+    if not m:
+        return send_file(path, mimetype=mimetype)
+
+    start = int(m.group(1))
+    end = int(m.group(2)) if m.group(2) else file_size - 1
+    end = min(end, file_size - 1)
+    length = end - start + 1
+
+    def generate():
+        with open(path, 'rb') as f:
+            f.seek(start)
+            remaining = length
+            chunk_size = 1024 * 1024
+            while remaining > 0:
+                chunk = f.read(min(chunk_size, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                yield chunk
+
+    resp = Response(generate(), 206, mimetype=mimetype, direct_passthrough=True)
+    resp.headers.add('Content-Range', f'bytes {start}-{end}/{file_size}')
+    resp.headers.add('Accept-Ranges', 'bytes')
+    resp.headers.add('Content-Length', str(length))
+    return resp
 
 @app.route('/download/<out_id>/<ext>')
 def download(out_id, ext):
