@@ -181,13 +181,13 @@
   .stage-duration { color: var(--accent); }
 
   .replace-btn {
+    cursor: pointer;
     background: transparent;
     border: 1px solid var(--border);
     border-radius: 7px;
     color: var(--muted);
     font-size: 0.78rem;
     padding: 7px 12px;
-    cursor: pointer;
     white-space: nowrap;
     transition: border-color 0.15s, color 0.15s;
   }
@@ -439,10 +439,10 @@
           <span class="stage-filename" id="stage-filename"></span>
           <span class="stage-duration" id="stage-duration" style="font-family:var(--mono); font-size:0.85rem; margin-left:8px;"></span>
         </div>
-        <button class="replace-btn" id="replace-btn-wrap">
+        <label class="replace-btn" id="replace-btn-wrap">
           ↺ Replace video
           <input type="file" id="file-input-2" accept="video/*">
-        </button>
+        </label>
       </div>
 
       <div class="mark-bar">
@@ -502,7 +502,7 @@
       <div id="status" style="margin-top:12px"></div>
 
       <div id="downloads-wrap" style="margin-top:12px">
-        <a id="merged-download-btn" class="download-btn" href="#">⬇️ Download merged video</a>
+        <a id="merged-download-btn" class="download-btn" href="#">⬇ Download merged video</a>
         <div class="divider" id="individual-divider" style="display:none">or download individual cuts</div>
         <div id="individual-downloads"></div>
       </div>
@@ -544,13 +544,13 @@
   function fmtDur(s) {
     if (!s) return '';
     const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = Math.floor(s%60);
-    return ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')};
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
   }
 
   function fmtDurPrecise(s) {
     if (s === null || s === undefined) return '';
     const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
-    return ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${sec.toFixed(2).padStart(5,'0')};
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${sec.toFixed(2).padStart(5,'0')}`;
   }
 
   function fmtSize(b) {
@@ -571,7 +571,7 @@
       const idx = seg.dataset.idx;
       const opt = document.createElement('option');
       opt.value = idx;
-      opt.textContent = Cut ${idx};
+      opt.textContent = `Cut ${idx}`;
       markTargetSelect.appendChild(opt);
     });
   }
@@ -584,7 +584,7 @@
     div.innerHTML = `
       <div class="segment-header">
         <div class="segment-label">Cut ${idx}</div>
-        ${idx > 1 ? <button class="remove-segment" onclick="removeSegment(${idx})">✕ Remove</button> : ''}
+        ${idx > 1 ? `<button class="remove-segment" onclick="removeSegment(${idx})">✕ Remove</button>` : ''}
       </div>
       <div class="time-row">
         <div>
@@ -602,7 +602,7 @@
   }
 
   function removeSegment(idx) {
-    const el = document.querySelector([data-idx="${idx}"]);
+    const el = document.querySelector(`[data-idx="${idx}"]`);
     if (el) el.remove();
     refreshMarkTargets();
   }
@@ -616,14 +616,14 @@
 
   markStartBtn.addEventListener('click', () => {
     const idx = markTargetSelect.value;
-    const seg = document.querySelector([data-idx="${idx}"]);
+    const seg = document.querySelector(`[data-idx="${idx}"]`);
     if (!seg) return;
     seg.querySelector('.seg-start').value = fmtDurPrecise(previewVideo.currentTime);
   });
 
   markEndBtn.addEventListener('click', () => {
     const idx = markTargetSelect.value;
-    const seg = document.querySelector([data-idx="${idx}"]);
+    const seg = document.querySelector(`[data-idx="${idx}"]`);
     if (!seg) return;
     seg.querySelector('.seg-end').value = fmtDurPrecise(previewVideo.currentTime);
   });
@@ -655,7 +655,7 @@
       if (e.lengthComputable) {
         const pct = Math.round(e.loaded / e.total * 100);
         uploadFill.style.width = pct + '%';
-        uploadLabel.textContent = Uploading… ${pct}%  (${fmtSize(e.loaded)} / ${fmtSize(e.total)});
+        uploadLabel.textContent = `Uploading… ${pct}%  (${fmtSize(e.loaded)} / ${fmtSize(e.total)})`;
       }
     });
 
@@ -674,7 +674,7 @@
           if (!el.value) el.placeholder = data.duration ? fmtDur(data.duration) : 'end';
         });
 
-        previewVideo.src = /preview/${uploadedFileId}/${uploadedExt};
+        previewVideo.src = `/preview/${uploadedFileId}/${uploadedExt}`;
         emptyState.style.display = 'none';
         videoStage.style.display = 'flex';
         trimBtn.disabled = false;
@@ -716,7 +716,7 @@
     const results = [];
 
     for (let i = 0; i < segments.length; i++) {
-      trimLabel.textContent = Trimming cut ${i+1} of ${segments.length}…;
+      trimLabel.textContent = `Trimming cut ${i+1} of ${segments.length}…`;
       trimFill.style.width = Math.round((i / segments.length) * 70 + 5) + '%';
 
       try {
@@ -742,7 +742,7 @@
 
     if (okResults.length === 0) {
       trimFill.className = 'progress-bar-fill'; trimFill.style.width = '100%';
-      showStatus('error', '✗ All segments failed:\n' + failed.map(r=>Cut ${r.idx}: ${r.error}).join('\n'));
+      showStatus('error', '✗ All segments failed:\n' + failed.map(r=>`Cut ${r.idx}: ${r.error}`).join('\n'));
       trimBtn.disabled = false;
       return;
     }
@@ -764,9 +764,9 @@
         trimLabel.textContent = 'Done!';
 
         if (res.ok) {
-          const errMsg = failed.length ? \n⚠️ ${failed.length} cut(s) failed and were skipped. : '';
-          showStatus('success', ✓ ${okResults.length} cuts merged into one file. + errMsg);
-          mergedBtn.href = /download/${data.output_id}/${data.output_ext};
+          const errMsg = failed.length ? `\n⚠ ${failed.length} cut(s) failed and were skipped.` : '';
+          showStatus('success', `✓ ${okResults.length} cuts merged into one file.` + errMsg);
+          mergedBtn.href = `/download/${data.output_id}/${data.output_ext}`;
           mergedBtn.style.display = 'flex';
 
           if (okResults.length > 1) {
@@ -774,8 +774,8 @@
             okResults.forEach(r => {
               const a = document.createElement('a');
               a.className = 'download-btn secondary';
-              a.href = /download/${r.output_id}/${r.ext};
-              a.textContent = ⬇️ Cut ${r.idx} only (.${r.ext});
+              a.href = `/download/${r.output_id}/${r.ext}`;
+              a.textContent = `⬇ Cut ${r.idx} only (.${r.ext})`;
               individualDownloads.appendChild(a);
             });
           }
@@ -785,8 +785,8 @@
           okResults.forEach(r => {
             const a = document.createElement('a');
             a.className = 'download-btn';
-            a.href = /download/${r.output_id}/${r.ext};
-            a.textContent = ⬇️ Download Cut ${r.idx} (.${r.ext});
+            a.href = `/download/${r.output_id}/${r.ext}`;
+            a.textContent = `⬇ Download Cut ${r.idx} (.${r.ext})`;
             individualDownloads.appendChild(a);
           });
         }
@@ -799,8 +799,8 @@
       trimFill.className = 'progress-bar-fill green';
       trimLabel.textContent = 'Done!';
       showStatus('success', '✓ Done!');
-      mergedBtn.href = /download/${okResults[0].output_id}/${okResults[0].ext};
-      mergedBtn.textContent = '⬇️ Download trimmed video';
+      mergedBtn.href = `/download/${okResults[0].output_id}/${okResults[0].ext}`;
+      mergedBtn.textContent = '⬇ Download trimmed video';
       mergedBtn.style.display = 'flex';
       individualDivider.style.display = 'none';
     }
