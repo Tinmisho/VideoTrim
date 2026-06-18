@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VideoTrim</title>
+<title>Snipcast</title>
 <style>
   :root {
     --bg: #0c0d12;
@@ -23,6 +23,51 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* Splash / intro fade */
+  #splash {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    transition: opacity 0.5s ease;
+  }
+
+  #splash.fade-out { opacity: 0; pointer-events: none; }
+
+  .splash-logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    animation: splash-in 0.6s ease both;
+  }
+
+  .splash-logo svg { width: 64px; height: 64px; }
+
+  .splash-logo .splash-name {
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #fff;
+  }
+
+  .splash-logo .splash-name span { color: var(--accent); }
+
+  @keyframes splash-in {
+    from { opacity: 0; transform: scale(0.92); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  body.loaded { animation: body-in 0.5s ease both; }
+
+  @keyframes body-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
 
   html, body {
     background: var(--bg);
@@ -406,9 +451,33 @@
 </head>
 <body>
 
+<div id="splash">
+  <div class="splash-logo">
+    <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="64" height="64" rx="14" fill="#14151c"/>
+      <g transform="translate(32,32)">
+        <line x1="-13" y1="-7" x2="13" y2="7" stroke="#6c8aff" stroke-width="4.5" stroke-linecap="round"/>
+        <line x1="-13" y1="7" x2="13" y2="-7" stroke="#6c8aff" stroke-width="4.5" stroke-linecap="round"/>
+        <circle cx="-13" cy="-7" r="4" fill="none" stroke="#6c8aff" stroke-width="4.5"/>
+        <circle cx="-13" cy="7" r="4" fill="none" stroke="#6c8aff" stroke-width="4.5"/>
+      </g>
+    </svg>
+    <div class="splash-name">Snip<span>cast</span></div>
+  </div>
+</div>
+
 <div class="topbar">
   <div class="brand">
-    <h1>Video<span>Trim</span></h1>
+    <svg viewBox="0 0 64 64" width="30" height="30" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="64" height="64" rx="14" fill="#1c1e28"/>
+      <g transform="translate(32,32)">
+        <line x1="-13" y1="-7" x2="13" y2="7" stroke="#6c8aff" stroke-width="4.5" stroke-linecap="round"/>
+        <line x1="-13" y1="7" x2="13" y2="-7" stroke="#6c8aff" stroke-width="4.5" stroke-linecap="round"/>
+        <circle cx="-13" cy="-7" r="4" fill="none" stroke="#6c8aff" stroke-width="4.5"/>
+        <circle cx="-13" cy="7" r="4" fill="none" stroke="#6c8aff" stroke-width="4.5"/>
+      </g>
+    </svg>
+    <h1>Snip<span>cast</span></h1>
     <div class="tagline">Cut and merge video clips, self-hosted</div>
   </div>
   <div class="vibe-tag">vibe coded by <span>M.G</span></div>
@@ -692,6 +761,23 @@
     xhr.send(fd);
   }
 
+  function pollJob(jobId, onProgress) {
+    return new Promise((resolve, reject) => {
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/job/${jobId}`);
+          const data = await res.json();
+          if (!res.ok) { clearInterval(interval); reject(new Error(data.error || 'job lookup failed')); return; }
+          onProgress(data.percent || 0);
+          if (data.status === 'done') { clearInterval(interval); resolve(data); }
+          else if (data.status === 'error') { clearInterval(interval); reject(new Error(data.error || 'processing failed')); }
+        } catch (e) {
+          clearInterval(interval); reject(e);
+        }
+      }, 400);
+    });
+  }
+
   trimBtn.addEventListener('click', async () => {
     if (!uploadedFileId) return;
 
@@ -709,18 +795,22 @@
     statusEl.style.display = 'none';
     trimProgressWrap.style.display = 'block';
     trimFill.className = 'progress-bar-fill animated';
-    trimFill.style.width = '5%';
+    trimFill.style.width = '0%';
+    trimLabel.textContent = 'Starting…';
 
     const outputExt = document.getElementById('output-ext').value;
     const fastMode = document.getElementById('fast-mode').checked;
     const results = [];
 
+    const willMerge = segments.length > 1;
+    const trimShare = willMerge ? 80 : 100;
+
     for (let i = 0; i < segments.length; i++) {
-      trimLabel.textContent = `Trimming cut ${i+1} of ${segments.length}…`;
-      trimFill.style.width = Math.round((i / segments.length) * 70 + 5) + '%';
+      const segBaseStart = (i / segments.length) * trimShare;
+      const segBaseRange = trimShare / segments.length;
 
       try {
-        const res = await fetch('/trim', {
+        const startRes = await fetch('/trim', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -729,10 +819,17 @@
             fast_mode: fastMode, output_ext: outputExt,
           }),
         });
-        const data = await res.json();
-        if (res.ok) results.push({ ok: true, output_id: data.output_id, ext: data.output_ext, idx: i+1 });
-        else results.push({ ok: false, idx: i+1, error: data.error });
-      } catch(e) {
+        const startData = await startRes.json();
+        if (!startRes.ok) { results.push({ ok: false, idx: i+1, error: startData.error }); continue; }
+
+        const jobData = await pollJob(startData.job_id, (pct) => {
+          const overall = segBaseStart + (pct / 100) * segBaseRange;
+          trimFill.style.width = Math.round(overall) + '%';
+          trimLabel.textContent = `Trimming cut ${i+1} of ${segments.length}… ${pct}%`;
+        });
+
+        results.push({ ok: true, output_id: jobData.output_id, ext: jobData.output_ext, idx: i+1 });
+      } catch (e) {
         results.push({ ok: false, idx: i+1, error: e.message });
       }
     }
@@ -748,50 +845,52 @@
     }
 
     if (okResults.length > 1) {
-      trimLabel.textContent = 'Merging segments…';
-      trimFill.style.width = '85%';
+      trimLabel.textContent = 'Merging segments… 0%';
 
       try {
-        const res = await fetch('/merge', {
+        const startRes = await fetch('/merge', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ output_ids: okResults.map(r => r.output_id), ext: outputExt }),
         });
-        const data = await res.json();
+        const startData = await startRes.json();
+
+        if (!startRes.ok) throw new Error(startData.error || 'merge failed to start');
+
+        const jobData = await pollJob(startData.job_id, (pct) => {
+          const overall = trimShare + (pct / 100) * (100 - trimShare);
+          trimFill.style.width = Math.round(overall) + '%';
+          trimLabel.textContent = `Merging segments… ${pct}%`;
+        });
 
         trimFill.style.width = '100%';
         trimFill.className = 'progress-bar-fill green';
         trimLabel.textContent = 'Done!';
 
-        if (res.ok) {
-          const errMsg = failed.length ? `\n⚠ ${failed.length} cut(s) failed and were skipped.` : '';
-          showStatus('success', `✓ ${okResults.length} cuts merged into one file.` + errMsg);
-          mergedBtn.href = `/download/${data.output_id}/${data.output_ext}`;
-          mergedBtn.style.display = 'flex';
+        const errMsg = failed.length ? `\n⚠ ${failed.length} cut(s) failed and were skipped.` : '';
+        showStatus('success', `✓ ${okResults.length} cuts merged into one file.` + errMsg);
+        mergedBtn.href = `/download/${jobData.output_id}/${jobData.output_ext}`;
+        mergedBtn.style.display = 'flex';
 
-          if (okResults.length > 1) {
-            individualDivider.style.display = 'block';
-            okResults.forEach(r => {
-              const a = document.createElement('a');
-              a.className = 'download-btn secondary';
-              a.href = `/download/${r.output_id}/${r.ext}`;
-              a.textContent = `⬇ Cut ${r.idx} only (.${r.ext})`;
-              individualDownloads.appendChild(a);
-            });
-          }
-        } else {
-          showStatus('error', '✗ Merge failed: ' + (data.error || 'unknown'));
-          mergedBtn.style.display = 'none';
-          okResults.forEach(r => {
-            const a = document.createElement('a');
-            a.className = 'download-btn';
-            a.href = `/download/${r.output_id}/${r.ext}`;
-            a.textContent = `⬇ Download Cut ${r.idx} (.${r.ext})`;
-            individualDownloads.appendChild(a);
-          });
-        }
+        individualDivider.style.display = 'block';
+        okResults.forEach(r => {
+          const a = document.createElement('a');
+          a.className = 'download-btn secondary';
+          a.href = `/download/${r.output_id}/${r.ext}`;
+          a.textContent = `⬇ Cut ${r.idx} only (.${r.ext})`;
+          individualDownloads.appendChild(a);
+        });
       } catch(e) {
-        showStatus('error', '✗ Merge request failed: ' + e.message);
+        trimFill.className = 'progress-bar-fill';
+        showStatus('error', '✗ Merge failed: ' + e.message);
+        mergedBtn.style.display = 'none';
+        okResults.forEach(r => {
+          const a = document.createElement('a');
+          a.className = 'download-btn';
+          a.href = `/download/${r.output_id}/${r.ext}`;
+          a.textContent = `⬇ Download Cut ${r.idx} (.${r.ext})`;
+          individualDownloads.appendChild(a);
+        });
       }
 
     } else {
@@ -807,6 +906,15 @@
 
     downloadsWrap.style.display = 'flex';
     trimBtn.disabled = false;
+  });
+
+  window.addEventListener('load', () => {
+    const splash = document.getElementById('splash');
+    setTimeout(() => {
+      splash.classList.add('fade-out');
+      document.body.classList.add('loaded');
+      setTimeout(() => splash.remove(), 550);
+    }, 450);
   });
 </script>
 </body>
