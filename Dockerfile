@@ -19,4 +19,4 @@ USER appuser
 
 EXPOSE 5000
 
-CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:5000", "--timeout", "600", "--max-requests", "100", "--max-requests-jitter", "10", "app:app"]
+CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:5000", "--timeout", "600", "app:app"]
